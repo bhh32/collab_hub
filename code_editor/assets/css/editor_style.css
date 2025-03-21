@@ -1,0 +1,42 @@
+/* editor.css */
+
+body {
+  margin: 0;
+  font-family: monospace;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.code-editor {
+  display: flex;
+  height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.line-numbers {
+  width: 40px;
+  padding: 8px;
+  text-align: right;
+  background-color: #2e2e2e;
+  color: #777;
+  user-select: none;
+}
+
+.code-input {
+  flex-grow: 1;
+  padding: 8px;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+/* Highlight styles (span classes) */
+span.keyword         { color: #569cd6; }
+span.string          { color: #d69d85; }
+span.comment         { color: #6a9955; font-style: italic; }
+span.function        { color: #dcdcaa; }
+span.variable        { color: #9cdcfe; }
+span.operator        { color: #d4d4d4; }
+span.constant        { color: #b5cea8; }
+span.punctuation     { color: #cccccc; }

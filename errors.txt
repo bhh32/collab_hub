@@ -1,0 +1,73 @@
+dx serve -p code_editor
+13:08:08 [dev] ----------------------------------------------------------------                Serving your Dioxus app: code_editor
+                • Press `ctrl+c` to exit the server
+                • Press `r` to rebuild the app
+                • Press `p` to toggle automatic rebuilds
+                • Press `v` to toggle verbose logging
+                • Press `/` for more commands and shortcuts
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+               ---------------------------------------------------------------- 
+13:08:09 [cargo] error[E0596]: cannot borrow `buf_setter` as mutable, as it is    --> code_editor/src/main.rs:120:33
+    |
+120 | ...                   buf_setter.set(Buffer::from_str(&text, Some(file_name.clone())));
+    |                       ^^^^^^^^^^ cannot borrow as mutable
+    |
+help: consider changing this to be mutable
+    |
+108 |                     let mut buf_setter = buffer_setter.clone();
+    |                         +++
+
+13:08:09 [cargo] error[E0596]: cannot borrow `name_setter` as mutable, as it is   --> code_editor/src/main.rs:121:33
+    |
+121 | ...                   name_setter.set(Some(file_name.clone()));
+    |                       ^^^^^^^^^^^ cannot borrow as mutable
+    |
+help: consider changing this to be mutable
+    |
+109 |                     let mut name_setter = filename_setter.clone();
+    |                         +++
+
+13:08:09 [cargo] error[E0596]: cannot borrow `lang_setter` as mutable, as it is   --> code_editor/src/main.rs:122:33
+    |
+122 | ...                   lang_setter.set(Some(lang.to_string()));
+    |                       ^^^^^^^^^^^ cannot borrow as mutable
+    |
+help: consider changing this to be mutable
+    |
+110 |                     let mut lang_setter = language_setter.clone();
+    |                         +++
+
+13:08:09 [cargo] error[E0382]: borrow of moved value: `reader`
+   --> code_editor/src/main.rs:127:21
+    |
+106 |                     let reader = web_sys::FileReader::new().expect("could not create file reader");
+    |                         ------ move occurs because `reader` has type `FileReader`, which does not implement the `Copy` trait
+...
+112 |                     let onload = Closure::wrap(Box::new(move |_: web_sys::Event| {
+    |                                                         ------------------------ value moved into closure here
+113 |                         if let Ok(result) = reader.result() {
+    |                                             ------ variable moved due to use in closure
+...
+127 |                     reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+    |                     ^^^^^^ value borrowed here after move
+
+13:08:09 [cargo] error[E0382]: borrow of moved value: `themes`
+   --> code_editor/src/main.rs:179:26
+    |
+31  |     let themes = available_themes();
+    |         ------ move occurs because `themes` has type `Vec<Theme>`, which does not implement the `Copy` trait
+...
+44  |     let handle_theme_change = use_callback(move |theme_name: String| {
+    |                                            ------------------------- value moved into closure here
+45  |         if let Some(idx) = themes.iter().position(|theme| theme.name == theme_name) {
+    |                            ------ variable moved due to use in closure
+...
+179 |     let current_theme = &themes[current_theme_idx()];
+    |                          ^^^^^^ value borrowed here after move
+
+13:08:09 [cargo] Some errors have detailed explanations: E0382, E0596.
+13:08:09 [cargo] For more information about an error, try `rustc --explain E0382`.
+13:08:09 [cargo] error: could not compile `code_editor` (bin "code_editor") due to 5 previous errors; 2 warnings emitted
+13:08:09 [cargo] Caused by:
+13:08:09 [cargo]   process didn't exit successfully: `/home/bryan/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name code_editor --edition=2021 code_editor/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=1 -C embed-bitcode=no -C debuginfo=2 -C debug-assertions=on --cfg 'feature="default"' --cfg 'feature="web"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "desktop", "mobile", "web"))' -C metadata=72d4b1ee34c1818f -C extra-filename=-ede5b485c9de6f5b --out-dir /home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps --target wasm32-unknown-unknown -C incremental=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/incremental -L dependency=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps -L dependency=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm-dev/deps --extern components_lib=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libcomponents_lib-31f476159cc4e5d7.rlib --extern console_error_panic_hook=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libconsole_error_panic_hook-0581874974deee58.rlib --extern dioxus=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libdioxus-152c9e1d1df0cc85.rlib --extern js_sys=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libjs_sys-f41ead6277158e89.rlib --extern ropey=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libropey-15cc3a06889cd397.rlib --extern serde=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libserde-de531bf2bdd1ff03.rlib --extern serde_json=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libserde_json-61d7e7259d2f0a00.rlib --extern wasm_bindgen=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libwasm_bindgen-ce8fdf7bc5b14333.rlib --extern web_sys=/home/bryan/Documents/projects/commercial/collab_hub/target/wasm32-unknown-unknown/wasm-dev/deps/libweb_sys-3820182ec020ccd5.rlib` (exit status: 1)
+13:08:09 [dev] Build failed: Other(Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information.)

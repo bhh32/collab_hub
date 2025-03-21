@@ -1,0 +1,44 @@
+[workspace]
+
+resolver = "2"
+members = ["code_editor", "components_lib", "code_editor"]
+
+[workspace.dependencies]
+dioxus = { version = "0.6.3", features = ["html", "web"] }
+ropey = "1.5"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "HtmlTextAreaElement",
+    "HtmlInputElement",
+    "Element",
+    "DomRect",
+    "KeyboardEvent",
+    "File",
+    "FileList",
+    "FileReader",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "HtmlAnchorElement",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+console_error_panic_hook = "0.1"
+
+[profile]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
