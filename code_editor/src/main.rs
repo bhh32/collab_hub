@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus::{logger::tracing::info, prelude::*};
 use wasm_bindgen::prelude::*;
 use web_sys::window;
 
@@ -9,6 +9,7 @@ use components_lib::text_editing::editor::{
     status_bar::StatusBar,
     theme::{Theme, available_themes},
     toolbar::Toolbar,
+    file_dialog::NewFileDialog,
 };
 
 fn main() {
@@ -26,7 +27,10 @@ fn App() -> Element {
     let mut cursor_position = use_signal(|| CursorPosition::default());
     let mut filename = use_signal(|| None::<String>);
     let mut language = use_signal(|| Some("plain".to_string()));
-
+    let mut show_new_file_dialog = use_signal(|| false);
+    // State to keep track of the currently open file handle
+    let mut file_handle = use_signal(|| None::<web_sys::FileSystemFileHandle>);
+    
     // Theme State
     let themes = available_themes();
     let themes_clone = themes.clone();
@@ -49,9 +53,18 @@ fn App() -> Element {
     });
 
     let handle_new_file = use_callback(move |_| {
+        show_new_file_dialog.set(true);
+    });
+
+    let handle_create_file = use_callback(move |(new_filename, new_language): (String, String)| {
         buffer.set(Buffer::new());
-        filename.set(None);
-        language.set(Some("plain".to_string()));
+        filename.set(Some(new_filename));
+        language.set(Some(new_language));
+        show_new_file_dialog.set(false);
+    });
+
+    let handle_cancel_new_file = use_callback(move |_: ()| {
+        show_new_file_dialog.set(false);
     });
 
     let handle_open_file = use_callback(move |_| {
@@ -140,41 +153,192 @@ fn App() -> Element {
         input_element.click(); // Trigger the file input dialog
     });
 
-    let handle_save_file = use_callback(move |_: ()| {
+    // Function to handle "Save As..." dialog
+    let handle_save_as = use_callback(move |_: ()| {
+        let window = web_sys::window().expect("no global `window` exists");
         let current_text = buffer.read().text();
         let current_filename = filename.read().clone().unwrap_or_else(|| "untitled.txt".to_string());
 
-        // Create a download link
-        let window = window().expect("no global `window` exists");
+        // Use the File System Access API's showSaveFilePicker
+        let js_save_as = format!(
+            r#"
+                (async function() {{
+                    try {{
+                        // Check if the File System Access API is supported
+                        if (!('showSaveFilePicker' in window)) {{
+                            throw new Error('File System Access API not supported');
+                        }}
+
+                        const options = {{
+                            suggestedName: '{}',
+                            types: [
+                                {{
+                                    description: 'Text Files',
+                                    accept: {{ 'text/plain': ['.txt', '.rs', '.js', '.html', '.css', '.md', '.json', '.toml', '.yaml', '.yml'] }}
+                                }}
+                            ]
+                        }};
+
+                        const handle = await window.showSaveFilePicker(options);
+                        const writable = await handle.createWritable();
+                        await writable.write('{}');
+                        await writable.close();
+
+                        // Store file info
+                        window._saveFileName = handle.name;
+                        window._saveFileHandle = handle;
+
+                        // Determine language from extension
+                        const ext = handle.name.split('.').pop().toLowerCase();
+                        let lang = 'plain';
+                        
+                        switch(ext) {{
+                            case 'rs': lang = 'rust'; break;
+                            case 'js': lang = 'javascript'; break;
+                            case 'html': lang = 'html'; break;
+                            case 'css': lang = 'css'; break;
+                            case 'md': lang = 'markdown'; break;
+                            case 'json': lang = 'json'; break;
+                            case 'toml': lang = 'toml'; break;
+                            case 'yaml':
+                            case 'yml': lang = 'yaml'; break;
+                        }}
+
+                        // Return success with file info
+                        return {{ success: true, name: handle.name, language: lang }};
+                    }} catch (e) {{
+                        console.error('Error in save as:", e);
+
+                        // If File System Access API is not supported, fallback to download Blob
+                        if (e.message === 'File System Access API not supported') {{
+                            const blob = new Blob(['{}'], {{ type: 'text/plain' }});
+                            const url = URL.createObjectURL(blob);
+                            const anchor = document.createElement('a');
+                            anchor.href = url;
+                            anchor.download = '{}';
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            return {{ success: true, name: '{}', language: '{}', fallback: true }};
+                        }}
+
+                        return {{ success: false, error: e.toString() }};
+                     }}
+            }})()
+            "#,
+            current_filename,
+            current_text.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n"),
+            current_text.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n"),
+            current_filename,
+            current_filename,
+            language.read().clone().unwrap_or_else(|| "plain".to_string())
+        );
+
+        // Execute the JaveScript and handle the result
+        let promise = js_sys::eval(&js_save_as);
+
+        // Use a script to check results and call back to our Rust code
         let document = window.document().expect("should have a document on window");
+        let script = document.create_element("script").expect("could not create script element");
 
-        let blob_parts = js_sys::Array::new();
-        blob_parts.push(&JsValue::from_str(&current_text));
+        script.set_text_content(Some(&format!(
+            r#"
+                (async function() {{
+                    try {{
+                        const result = await {};
+                        if (result && result.success) {{
+                            // Update Rust state
+                            window._updateFileInfo && window._updateFileInfo(result.name, result.language);
 
-        let mut options = web_sys::BlobPropertyBag::new();
-        options.type_("text/plain");
+                            // Store file handle if not using fallback
+                            if (!result.fallback) {{
+                                window._saveFileHandle && window._storeFileHandle(window._savedFileHandle);
+                            }}
+                        }}
+                    }} catch (e) {{
+                        console.error("Error processing save result:", e); 
+                    }}
+                }})();
+            "#,
+            js_save_as
+        )));
 
-        let blob = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &options)
-            .expect("could not create blob");
+        document.body().expect("no body").append_child(&script).expect("could not append script");
 
-        let url = web_sys::Url::create_object_url_with_blob(&blob)
-            .expect("could not create object URL");
+        // Create callback functios for JavaScript to call back to Rust
+        let update_name_lang = Closure::wrap(Box::new(move |name: String, lang: String| {
+            filename.set(Some(name));
+            language.set(Some(lang));
+        }) as Box<dyn FnMut(String, String)>);
 
-        let anchor = document
-            .create_element("a")
-            .expect("could not create anchor")
-            .dyn_into::<web_sys::HtmlAnchorElement>()
-            .expect("not an anchor element");
+        // Store file handle
+        let store_handle = Closure::wrap(Box::new(move |handle: web_sys::FileSystemFileHandle| {
+            file_handle.set(Some(handle));
+        }) as Box<dyn FnMut(web_sys::FileSystemFileHandle)>);
 
-        anchor.set_href(&url);
-        anchor.set_download(&current_filename);
+        // Attach callbacks to window
+        let window_any = window.dyn_into::<js_sys::Object>().expect("could not cast window to Object");
+        js_sys::Reflect::set(
+            &window_any,
+            &JsValue::from_str("_updateFileInfo"),
+            &update_name_lang.as_ref()
+        ).expect("Failed to set window._updateFileInfo");
 
-        // Append, click and remove to trigger download
-        document.body().expect("document has no body").append_child(&anchor).expect("could not append anchor");
-        anchor.click(); // Trigger the download
-        document.body().expect("document has no body").remove_child(&anchor).expect("could not remove anchor");
+        js_sys::Reflect::set(
+            &window_any,
+            &JsValue::from_str("_storeFileHandle"),
+            &store_handle.as_ref()
+        ).expect("Failed to set window._storeFileHandle");
 
-        web_sys::Url::revoke_object_url(&url).expect("could not revoke object URL");
+        // Prevent the callbacks from being dropped
+        update_name_lang.forget();
+        store_handle.forget();
+    });
+
+    let handle_save_file = use_callback(move |_: ()| {
+        // Check if we aleady have a file handle
+        if let Some(handle) = file_handle() {
+            // Get the current text
+            let current_text = buffer.read().text();
+
+            // Use JavaScript to save the existing file
+            let js_save = 
+                r#"
+                (async function() {{
+                    try {{
+                        const handle = window._savedFileHandle;
+                        if (!handle) {{
+                            throw new Error("No file handle availabe to save the file");
+                        }}
+
+                        // Create a writable stream and write the current text
+                        const writable = await arguments[0].createWritable();
+                        await writable.write(arguments[0]);
+                        await writable.close();
+                        return true;
+                    }} catch (e) {{
+                        console.error('Error saving file:", e);
+                        return false; 
+                    }}
+                }})()
+            "#;
+
+            // Execute the JavaScript with the current text as an argument
+            let window = web_sys::window().expect("no global `window` exists");
+            let js_function = js_sys::Function::new_with_args("text", js_save);
+            let result = js_function.call1(
+                &JsValue::NULL,
+                &JsValue::from_str(&current_text)
+            );
+
+            if let Err(e) = result {
+                // If there's an error, fall back to Save As...
+                info!("Error saving file:{e:?}, falling back to Save As...");
+                handle_save_as(());
+            }
+        } else {
+            // No existing file handle, perform "Save As..."
+            handle_save_as(());
+        }
     });
 
     // Get current theme
@@ -193,6 +357,7 @@ fn App() -> Element {
                 on_new_file: handle_new_file,
                 on_open_file: handle_open_file,
                 on_save_file: handle_save_file,
+                on_save_as: handle_save_as,
             }
 
             div {
@@ -212,6 +377,14 @@ fn App() -> Element {
                 cursor_line: cursor_position().line,
                 cursor_column: cursor_position().column,
                 total_lines: buffer().line_count(),
+            }
+
+            if show_new_file_dialog() {
+                NewFileDialog {
+                    theme: current_theme.clone(),
+                    on_create: handle_create_file,
+                    on_cancel: handle_cancel_new_file,
+                }
             }
         }
     }

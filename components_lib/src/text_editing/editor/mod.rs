@@ -5,6 +5,7 @@ pub mod theme;
 pub mod status_bar;
 pub mod toolbar;
 pub mod highlighter;
+pub mod file_dialog;
 
 use dioxus::prelude::*;
 use wasm_bindgen::{
@@ -186,6 +187,7 @@ pub fn CodeEditor() -> Element {
                 on_new_file: handle_new_file,
                 on_open_file: handle_open_file,
                 on_save_file: handle_save_file,
+                on_save_as: handle_save_file, // Placeholder for save as functionality
             }
 
             div {

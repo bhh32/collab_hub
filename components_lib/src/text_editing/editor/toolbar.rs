@@ -10,6 +10,7 @@ pub fn Toolbar(
     on_new_file: EventHandler<()>,
     on_open_file: EventHandler<()>,
     on_save_file: EventHandler<()>,
+    on_save_as: EventHandler<()>,
 ) -> Element {
     let toolbar_style = format!(
         "display: flex; padding: 0.5rem; gap: 0.5rem;
@@ -46,6 +47,11 @@ pub fn Toolbar(
                 style: button_style.clone(),
                 onclick: move |_| on_save_file.call(()),
                 "Save"
+            }
+            button {
+                style: button_style.clone(),
+                onclick: move |_| on_save_as.call(()),
+                "Save As"
             }
 
             select {
