@@ -1,0 +1,10 @@
+Line 24: binary operation `==` cannot be applied to type `&mut MenuBarProps`rustcClick for full compiler diagnostic
+menu.rs(25, 40): consider further restricting type parameter `H` with trait `PartialEq`: ` + std::cmp::PartialEq`
+
+Lines 75 and 88: no method named `clone` found for type parameter `H` in the current scope
+items from traits can only be used if the type parameter is bounded by the traitrustcClick for full compiler diagnostic
+menu.rs(25, 16): method `clone` not found for this type parameter
+menu.rs(25, 40): the following trait defines an item `clone`, perhaps you need to restrict type parameter `H` with it:: ` + Clone`
+
+Lines 176 and 194: expected identifierrust-analyzermacro-error
+expected identifierrustcClick for full compiler diagnostic

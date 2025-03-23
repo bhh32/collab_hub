@@ -1,4 +1,6 @@
-pub mod text_editing;
+pub mod editor;
+pub mod core;
 
 // Rexport the editor component
-pub use text_editing::editor;
+pub use editor::CodeEditor;
+pub use crate::core::themes::{Theme, available_themes};

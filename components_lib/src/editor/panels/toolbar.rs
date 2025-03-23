@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use super::theme::Theme;
+use crate::core::Theme;
 
 #[component]
 pub fn Toolbar(

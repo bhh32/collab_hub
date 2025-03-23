@@ -1,5 +1,5 @@
 // src/text_editing/editor/highlighter.rs
-use super::theme::Theme;
+use crate::core::themes::Theme;
 use std::collections::HashMap;
 
 pub struct SyntaxHighlighter {

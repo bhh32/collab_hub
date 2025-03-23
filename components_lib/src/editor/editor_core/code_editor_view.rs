@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{HtmlTextAreaElement, KeyboardEvent};
-use super::{buffer::Buffer, cursor::CursorPosition, theme::Theme, highlighter::SyntaxHighlighter};
+use super::{buffer::Buffer, cursor::CursorPosition, highlighter::SyntaxHighlighter};
+use crate::core::Theme;
 
 #[component]
 pub fn EditorView(
