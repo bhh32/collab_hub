@@ -43,8 +43,8 @@ pub struct EditorMenuHandler {
     // State fields for menu operations
     pub buffer_has_changes: bool,
     pub has_filename: bool,
-    pub theme_is_light: bool, 
-    pub theme_is_dark: bool,
+    pub theme_is_light: Signal<bool>, 
+    pub theme_is_dark: Signal<bool>,
 }
 
 impl Default for EditorMenuHandler {
@@ -52,8 +52,8 @@ impl Default for EditorMenuHandler {
         Self {
             buffer_has_changes: false,
             has_filename: false,
-            theme_is_light: false,
-            theme_is_dark: true,
+            theme_is_light: Signal::new(false),
+            theme_is_dark: Signal::new(true),
         }
     }
 }
@@ -63,14 +63,23 @@ impl EditorMenuHandler {
         buffer_has_changes: bool,
         has_filename: bool,
         theme_is_light: bool,
-        theme_is_dark: bool,
     ) -> Self {
-        Self {
+        let mut new_handler = Self {
             buffer_has_changes,
             has_filename,
-            theme_is_light,
-            theme_is_dark,
+            ..Default::default()
+        };
+
+        // Set the theme signals based on the passed values
+        if theme_is_light {
+            new_handler.theme_is_light.set(true);
+            new_handler.theme_is_dark.set(false);
+        } else {
+            new_handler.theme_is_dark.set(true);
+            new_handler.theme_is_light.set(false);
         }
+
+        new_handler
     }
 }
 
@@ -104,10 +113,20 @@ impl MenuHandler for EditorMenuHandler {
                 let _ = js_sys::eval("document.execCommand('paste');");
             },
             "view.theme.light" => {
-                let _ = js_sys::eval("window._editorActions && window._editorActions.setTheme('light')");
+                if !*self.theme_is_light.read() {
+                    self.theme_is_light.set(true);
+                    self.theme_is_dark.set(false);
+
+                    let _ = js_sys::eval("window._editorActions && window._editorActions.setTheme('light')");
+                }
             },
             "view.theme.dark" => {
-                let _ = js_sys::eval("window._editorActions && window._editorActions.setTheme('dark')");
+                if !*self.theme_is_dark.read() {
+                    self.theme_is_dark.set(true);
+                    self.theme_is_light.set(false);
+
+                    let _ = js_sys::eval("window._editorActions && window._editorActions.setTheme('dark')");
+                }
             },
             "help.about" => {
                 let _ = js_sys::eval(
@@ -128,8 +147,8 @@ impl MenuHandler for EditorMenuHandler {
 
     fn is_item_checked(&self, item_id: &str) -> Option<bool> {
         match item_id {
-            "view.theme.light" => Some(self.theme_is_light),
-            "view.theme.dark" => Some(self.theme_is_dark),
+            "view.theme.light" => Some(*self.theme_is_light.read()),
+            "view.theme.dark" => Some(*self.theme_is_dark.read()),
             _ => None,
         }
     }
@@ -646,7 +665,6 @@ let menu_handler = EditorMenuHandler::new(
     buffer.read().is_modified(),
     filename.read().is_some(),
     themes[current_theme_idx()].name.contains("Light"),
-    themes[current_theme_idx()].name.contains("Dark"),
 );
 
     rsx! {

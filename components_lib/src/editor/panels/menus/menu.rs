@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::core::Theme;
 use std::collections::HashMap;
+use wasm_bindgen::prelude::*;
 
 // Menu item structure
 #[derive(Clone, PartialEq)]
@@ -19,6 +20,110 @@ pub trait MenuHandler {
     fn handle_menu_action(&mut self, action_id: &str);
     fn is_item_enabled(&self, item_id: &str) -> bool;
     fn is_item_checked(&self, item_id: &str) -> Option<bool>;
+}
+
+// Component for rendering a nested submenu
+#[component]
+fn NestedSubmenu<H: MenuHandler + Clone + PartialEq + 'static>(
+    theme: Theme,
+    submenu: Vec<MenuItem>,
+    parent_id: String,
+    handler: H,
+    dropdown_item_style: String,
+    disabled_style: String,
+) -> Element {
+    let container_style = format!(
+        "position: absolute; left: 100%; top: 0; background-color: {}; color: {}; \
+         min-width: 200px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); z-index: 1000; \
+         display: none; flex-direction: column; padding: 0.25rem 0;",
+        theme.ui.toolbar_bg, theme.ui.toolbar_fg
+    );
+
+    rsx! {
+        div {
+            class: "submenu-container",
+            "data-submenu-id": "{parent_id}",
+            style: container_style,
+            
+            {
+                submenu.iter().map(|item| {
+                    let item_id = item.id.clone();
+                    let item_label = item.label.clone();
+                    let is_enabled = handler.is_item_enabled(&item_id);
+                    let is_checked = handler.is_item_checked(&item_id);
+                    let has_shortcut = item.shortcut.is_some();
+                    let has_submenu = item.submenu.is_some();
+                    let is_action = item.action;
+                    
+                    let item_style = format!("{} {}", dropdown_item_style, 
+                                         if !is_enabled { &disabled_style } else { "" });
+
+                    let mut handler_clone = handler.clone();
+                    
+                    rsx! {
+                        div {
+                            key: "{item_id}",
+                            "data-menu-id": "{item_id.clone()}",
+                            style: item_style,
+                            onclick: move |event: MouseEvent| {
+                                if !is_enabled {
+                                    event.stop_propagation();
+                                    return;
+                                }
+
+                                if is_action {
+                                    handler_clone.handle_menu_action(&item_id.clone());
+                                    event.stop_propagation();
+                                }
+                            },
+                            
+                            // Left side with checkbox and label
+                            div {
+                                style: "display: flex; align-items: center;",
+                                
+                                // Show checkbox if applicable
+                                if let Some(checked) = is_checked {
+                                    span {
+                                        style: "margin-right: 0.5rem; width: 1rem;",
+                                        {
+                                            if checked {
+                                                "✓"
+                                            } else {
+                                                " "
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Item label
+                                span { {item_label.clone()} }
+                            }
+                            
+                            // Right side with shortcut
+                            div {
+                                style: "display: flex; align-items: center;",
+                                
+                                if let Some(shortcut) = &item.shortcut {
+                                    span {
+                                        style: "color: #999; font-size: 0.9em; margin-left: 1rem",
+                                        {shortcut.clone()}
+                                    }
+                                }
+                                
+                                // Show submenu indicator if it has nested submenu
+                                if has_submenu {
+                                    span {
+                                        style: "margin-left: 0.5rem;",
+                                        "▶"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    }
 }
 
 #[component]
@@ -78,7 +183,101 @@ pub fn MenuBar<H: MenuHandler + Clone + PartialEq + 'static> (
             handler.handle_menu_action(item_id);
         }
     };
+    
+    // Set up global JS handler for nested menu items
+    let click_handler = {
+        let mut handler_clone = handler.clone();
+        let mut active_menu_clone = active_menu.clone();
+        
+        Closure::wrap(Box::new(move |action_id: String| {
+            // Close the menu
+            active_menu_clone.set(None);
+            
+            // Call the action handler
+            handler_clone.handle_menu_action(&action_id);
+        }) as Box<dyn FnMut(String)>)
+    };
+    
+    // Attach to window
+    let window = web_sys::window().expect("no global window exists");
+    let window_obj = window.dyn_into::<js_sys::Object>().expect("window should be an object");
+    
+    js_sys::Reflect::set(
+        &window_obj,
+        &JsValue::from_str("_handleMenuAction"),
+        &click_handler.as_ref()
+    ).expect("Failed to set menu handler");
+    
+    // Prevent the callback from being dropped
+    click_handler.forget();
+    
+    // Set up general menu event handlers using JavaScript
+    use_effect(move || {
+        let menu_js = r#"
+            // Setup function to handle menu events
+            function setupMenuEvents() {
+                // Handle clicks on menu items
+                document.querySelectorAll('[data-menu-id]').forEach(item => {
+                    // Click handler for menu actions
+                    item.addEventListener('click', event => {
+                        if (window._handleMenuAction) {
+                            window._handleMenuAction(item.getAttribute('data-menu-id'));
+                        }
+                        event.stopPropagation();
+                    });
+                    
+                    // Hover handler for menu navigation
+                    item.addEventListener('mouseover', event => {
+                        // Hide all other submenus at this level
+                        const parentMenu = item.closest('.submenu-container');
+                        if (parentMenu) {
+                            const siblings = parentMenu.querySelectorAll('.submenu-container');
+                            siblings.forEach(menu => {
+                                menu.style.display = 'none';
+                            });
+                        }
+                        
+                        // Show this item's submenu if it has one
+                        const submenuId = item.getAttribute('data-has-submenu');
+                        if (submenuId) {
+                            const submenu = document.querySelector(`[data-submenu-id="${submenuId}"]`);
+                            if (submenu) {
+                                submenu.style.display = 'flex';
+                            }
+                        }
+                    });
+                });
+            }
+            
+            // Run the setup
+            setupMenuEvents();
+            
+            // Set up a MutationObserver to handle dynamically added menu items
+            const menuObserver = new MutationObserver(mutations => {
+                setupMenuEvents();
+            });
+            
+            // Observe the entire document for changes to the DOM
+            menuObserver.observe(document.body, { 
+                childList: true,
+                subtree: true
+            });
+        "#;
+        
+        let _ = js_sys::eval(menu_js);
+        
+        // Cleanup on unmount
+        (move || {
+            let _ = js_sys::eval(r#"
+                // Clean up the observer when menu is unmounted
+                if (window.menuObserver) {
+                    window.menuObserver.disconnect();
+                }
+            "#);
+        })()
+    });
 
+    // Render the menu bar
     rsx! {
         div {
             style: menu_bar_style,
@@ -89,98 +288,155 @@ pub fn MenuBar<H: MenuHandler + Clone + PartialEq + 'static> (
 
             // Render top-level menu items
             {
-                menus.clone().into_iter().map(|item| {
+                menus.iter().map(|item| {
                     let item_id = item.id.clone();
+                    let item_id_clone = item_id.clone();
                     let item_label = item.label.clone();
                     let has_submenu = item.submenu.is_some();
                     let is_active = active_menu() == Some(item_id.clone());
-                    
-                    let style_value = if is_active {
-                        format!("{} {}", menu_item_style, menu_item_hover_style)
-                    } else {
-                        menu_item_style.to_string()
-                    };
-
-                    let item_id_clone = item_id.clone();
+                    let item_style = format!("{} {}", menu_item_style, 
+                                          if is_active { &menu_item_hover_style } else { "" });
+                    let mut active_menu_clone = active_menu.clone();
                     
                     rsx! {
                         div {
-                            key: "{item_id.clone()}",
-                            style: style_value,
+                            key: item_id.clone(),
+                            style: item_style,
                             onmouseover: move |_| {
-                                // If a menu is already open, switch to this one
-                                if active_menu().is_some() {
-                                    active_menu.set(Some(item_id_clone.clone()));
+                                // If a menu is already open, switch to this one immediately on hover
+                                if active_menu_clone().is_some() {
+                                    // Close any open submenus first
+                                    let _ = js_sys::eval("document.querySelectorAll('.submenu-container').forEach(m => m.style.display = 'none');");
+                                    // Set the new active menu
+                                    active_menu_clone.set(Some(item_id.clone()));
                                 }
                             },
                             onclick: move |_| {
-                                toggle_menu(item_id.clone());
+                                toggle_menu(item_id_clone.clone());
                             },
                             
                             // Item label
-                            span { "{item_label}" }
-                        }
-                        
-                        // Render dropdown if this menu is active
-                        if is_active && has_submenu {
-                            div {
-                                style: dropdown_style.clone(),
-                                onclick: move |event| event.stop_propagation(),
-                                
-                                {
-                                    item.submenu.clone().unwrap().into_iter().map(|submenu_item| {
-                                        let sub_id = submenu_item.id.clone();
-                                        let sub_label = submenu_item.label.clone();
-                                        let is_enabled = handler.is_item_enabled(&sub_id);
-                                        let is_checked = handler.is_item_checked(&sub_id);
-                                        
-                                        let sub_style = if is_enabled {
-                                            dropdown_item_style.to_string()
-                                        } else {
-                                            format!("{} {}", dropdown_item_style, disabled_style)
-                                        };
-                                        
-                                        let mut handle_action = handle_menu_action.clone();
-                                        
-                                        rsx! {
-                                            div {
-                                                key: "{sub_id}",
-                                                style: sub_style,
-                                                onclick: move |event| {
-                                                    if !is_enabled {
-                                                        event.stop_propagation();
-                                                        return;
-                                                    }
-                                                    
-                                                    if submenu_item.action {
-                                                        handle_action(&sub_id);
-                                                    }
-                                                },
-                                                
-                                                // Left side - label with possible checkbox
+                            span { {item_label.clone()} }
+                            
+                            // Render dropdown if this menu is active
+                            if is_active && has_submenu {
+                                div {
+                                    style: dropdown_style.clone(),
+                                    onclick: move |event| { event.stop_propagation(); },
+                                    
+                                    {
+                                        item.submenu.as_ref().unwrap().iter().map(|submenu_item| {
+                                            let sub_id = submenu_item.id.clone();
+                                            let sub_label = submenu_item.label.clone();
+                                            let is_enabled = handler.is_item_enabled(&sub_id);
+                                            let is_checked = handler.is_item_checked(&sub_id);
+                                            let has_shortcut = submenu_item.shortcut.is_some();
+                                            let shortcut = submenu_item.shortcut.clone();
+                                            let sub_style = format!("{} {}", dropdown_item_style, 
+                                                               if !is_enabled { disabled_style } else { "" });
+                                            let mut on_action = handle_menu_action.clone();
+                                            let is_action = submenu_item.action;
+                                            
+                                            // Check if this submenu item has its own submenu
+                                            let has_nested_submenu = submenu_item.submenu.is_some();
+                                            
+                                            rsx! {
                                                 div {
-                                                    style: "display: flex; align-items: center;",
+                                                    key: sub_id.clone(),
+                                                    style: sub_style,
+                                                    "attr:data_menu_id": sub_id.clone(),
+                                                    "attr:data_has_submenu": if has_nested_submenu { Some(sub_id.clone()) } else { None },
+                                                    // Track hover state to handle submenu display
+                                                    onmouseover: {
+                                                        let sub_id_for_hover = sub_id.clone();
+                                                        move |event: dioxus::events::MouseEvent| {
+                                                            // If this item has a submenu, we want to show it on hover
+                                                            if has_nested_submenu {
+                                                                // Stop propagation to prevent parent handlers from firing
+                                                                event.stop_propagation();
+                                                                
+                                                                // Tell JavaScript to show this submenu
+                                                                let js_code = format!(
+                                                                    "document.querySelectorAll('.submenu-container').forEach(m => m.style.display = 'none'); \
+                                                                    const current = document.querySelector('[data-submenu-id=\"{}\"]'); \
+                                                                    if (current) current.style.display = 'flex';",
+                                                                    sub_id_for_hover
+                                                                );
+                                                                let _ = js_sys::eval(&js_code);
+                                                            }
+                                                        }
+                                                    },
+                                                    onclick: {
+                                                        let sub_id_for_click = sub_id.clone();
+                                                        move |event: dioxus::events::MouseEvent| {
+                                                            if !is_enabled {
+                                                                event.stop_propagation();
+                                                                return;
+                                                            }
+                                                            
+                                                            if is_action {
+                                                                on_action(&sub_id_for_click);
+                                                            }
+                                                        }
+                                                    },
                                                     
-                                                    if let Some(checked) = is_checked {
-                                                        span {
-                                                            style: "margin-right: 0.5rem; width: 1rem;",
-                                                            if checked { "✓" } else { " " }
+                                                    // Left side with checkbox and label
+                                                    div {
+                                                        style: "display: flex; align-items: center;",
+                                                        
+                                                        // Show checkbox if applicable
+                                                        if let Some(checked) = is_checked {
+                                                            span {
+                                                                style: "margin-right: 0.5rem; width: 1rem;",
+                                                                {
+                                                                    if checked {
+                                                                        "\u{2713}"
+                                                                    } else {
+                                                                        " "
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        
+                                                        // Item label
+                                                        span { {sub_label.clone()} }
+                                                    }
+                                                    
+                                                    div {
+                                                        style: "display: flex; align-items: center;",
+                                                        
+                                                        // Right side with shortcut
+                                                        if has_shortcut {
+                                                            span {
+                                                                style: "color: #999; font-size: 0.9em; margin-left: 1rem",
+                                                                {shortcut.clone().unwrap()}
+                                                            }
+                                                        }
+                                                        
+                                                        // Show submenu indicator if it has nested submenu
+                                                        if has_nested_submenu {
+                                                            span {
+                                                                style: "margin-left: 0.5rem;",
+                                                                "\u{25b6}"
+                                                            }
                                                         }
                                                     }
                                                     
-                                                    span { "{sub_label}" }
-                                                }
-                                                
-                                                // Right side - shortcut text
-                                                if let Some(shortcut) = &submenu_item.shortcut {
-                                                    div {
-                                                        style: "color: #999; font-size: 0.9em; margin-left: 1rem;",
-                                                        "{shortcut}"
+                                                    // Include nested submenu if this item has one
+                                                    if has_nested_submenu {
+                                                        NestedSubmenu {
+                                                            theme: theme.clone(),
+                                                            submenu: submenu_item.submenu.as_ref().unwrap().clone(),
+                                                            parent_id: sub_id.clone(),
+                                                            handler: handler.clone(),
+                                                            dropdown_item_style: dropdown_item_style.to_string(),
+                                                            disabled_style: disabled_style.to_string(),
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
                                 }
                             }
                         }
