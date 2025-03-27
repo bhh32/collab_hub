@@ -1,5 +1,5 @@
 // src/text_editing/editor/highlighter.rs
-use crate::core::themes::Theme;
+use components_lib::core::themes::Theme;
 use std::collections::HashMap;
 
 pub struct SyntaxHighlighter {
@@ -48,7 +48,7 @@ impl SyntaxHighlighter {
         // Simple syntax highlighting by word
         let mut result = String::new();
         let mut in_string = false;
-        let mut in_comment = false;
+        let in_comment = false;
         let mut current_word = String::new();
         
         // Check for comments first (simplest case)

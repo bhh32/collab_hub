@@ -1,5 +1,9 @@
+mod code_editor;
+mod code_editor_view;
+mod highlighter;
+
 use dioxus::prelude::*;
-use components_lib::editor::CodeEditor;
+use crate::code_editor::CodeEditor;
 
 fn main() {
     // Initialize panic hook for better error messages
