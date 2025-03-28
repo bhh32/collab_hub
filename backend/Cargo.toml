@@ -1,0 +1,16 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.1"
+tower-http = { version = "0.6.2", features = ["trace", "fs"] }
+tokio = { version = "1.44.1", features = ["full"] }
+dioxus-fullstack = "0.6.3"
+hyper = "1.6.0"
+mime_guess = "2.0.5"
+
+[build-dependencies]
+colored = "3.0.0"
+walkdir = "2.5.0"

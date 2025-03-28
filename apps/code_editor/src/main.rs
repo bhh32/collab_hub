@@ -2,19 +2,15 @@ mod code_editor;
 mod code_editor_view;
 mod highlighter;
 
-use dioxus::prelude::*;
+use dioxus::{prelude::*, web::{launch::launch_cfg, Config}};
 use crate::code_editor::CodeEditor;
 
 fn main() {
-    // Initialize panic hook for better error messages
-    console_error_panic_hook::set_once();
-
-    // Launch the web app
-    launch(App);
+    launch_cfg(App, Config::new().rootname("/code_editor"));
 }
 
 #[component]
-fn App() -> Element {
+pub fn App() -> Element {
     // Render the CodeEditor component (which should handle everything else)
     rsx! {
         CodeEditor {}

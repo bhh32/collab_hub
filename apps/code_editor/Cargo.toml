@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-components_lib = { path = "../components_lib" }
+components_lib = { path = "../../components_lib" }
 dioxus = { workspace = true }
 ropey = { workspace = true }
 wasm-bindgen = { workspace = true }
@@ -20,5 +20,3 @@ console_error_panic_hook = { workspace = true }
 [features]
 default = ["web"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop"]
-mobile = ["dioxus/mobile"]

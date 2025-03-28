@@ -48,6 +48,7 @@ fn NestedSubmenu<H: MenuHandler + Clone + PartialEq + 'static>(
             {
                 submenu.iter().map(|item| {
                     let item_id = item.id.clone();
+                    let item_id_clone = item_id.clone();
                     let item_label = item.label.clone();
                     let is_enabled = handler.is_item_enabled(&item_id);
                     let is_checked = handler.is_item_checked(&item_id);
@@ -62,7 +63,7 @@ fn NestedSubmenu<H: MenuHandler + Clone + PartialEq + 'static>(
                     
                     rsx! {
                         div {
-                            key: "{item_id}",
+                            key: "{item_id.clone()}",
                             "data-menu-id": "{item_id.clone()}",
                             style: item_style,
                             onclick: move |event: MouseEvent| {
@@ -72,7 +73,7 @@ fn NestedSubmenu<H: MenuHandler + Clone + PartialEq + 'static>(
                                 }
 
                                 if is_action {
-                                    handler_clone.handle_menu_action(&item_id.clone());
+                                    handler_clone.handle_menu_action(&item_id_clone.clone());
                                     event.stop_propagation();
                                 }
                             },
@@ -290,7 +291,8 @@ pub fn MenuBar<H: MenuHandler + Clone + PartialEq + 'static> (
             {
                 menus.iter().map(|item| {
                     let item_id = item.id.clone();
-                    let item_id_clone = item_id.clone();
+                    let item_id_onmouseover = item_id.clone();
+                    let item_id_onclick = item_id.clone();
                     let item_label = item.label.clone();
                     let has_submenu = item.submenu.is_some();
                     let is_active = active_menu() == Some(item_id.clone());
@@ -308,11 +310,11 @@ pub fn MenuBar<H: MenuHandler + Clone + PartialEq + 'static> (
                                     // Close any open submenus first
                                     let _ = js_sys::eval("document.querySelectorAll('.submenu-container').forEach(m => m.style.display = 'none');");
                                     // Set the new active menu
-                                    active_menu_clone.set(Some(item_id.clone()));
+                                    active_menu_clone.set(Some(item_id_onmouseover.clone()));
                                 }
                             },
                             onclick: move |_| {
-                                toggle_menu(item_id_clone.clone());
+                                toggle_menu(item_id_onclick.clone());
                             },
                             
                             // Item label
